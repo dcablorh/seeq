@@ -152,6 +152,7 @@ private fun ModelSetup(state: ModelState, onDownload: () -> Unit) {
 private fun ReadyContent(viewModel: MainViewModel) {
   val search by viewModel.search.collectAsStateWithLifecycle()
   val progress by viewModel.indexProgress.collectAsStateWithLifecycle()
+  val indexed by viewModel.indexed.collectAsStateWithLifecycle()
   val context = LocalContext.current
 
   Column(Modifier.fillMaxSize()) {
@@ -176,23 +177,34 @@ private fun ReadyContent(viewModel: MainViewModel) {
     when {
       search.error != null ->
         Message(search.error!!, isError = true)
-      search.query.isBlank() ->
+      search.query.isBlank() && indexed.isEmpty() ->
         Message("Describe what you're looking for, like \"blue car at night\" or \"receipt from August 5\".")
+      search.query.isBlank() -> {
+        Text(
+          "${indexed.size} photos indexed. Describe what you're looking for to search them.",
+          modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        PhotoGrid(indexed) { openPhoto(context, it) }
+      }
       search.results.isEmpty() && !search.searching ->
         Message(if (progress.running) "No matches yet. Still indexing, so results will improve." else "No matches found.")
-      else ->
-        LazyVerticalGrid(
-          columns = GridCells.Adaptive(110.dp),
-          modifier = Modifier.fillMaxSize(),
-          contentPadding = PaddingValues(16.dp),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          items(search.results, key = { it.id }) { record ->
-            Thumbnail(record, onClick = { openPhoto(context, record) })
-          }
-        }
+      else -> PhotoGrid(search.results) { openPhoto(context, it) }
     }
+  }
+}
+
+@Composable
+private fun PhotoGrid(records: List<PhotoRecord>, onClick: (PhotoRecord) -> Unit) {
+  LazyVerticalGrid(
+    columns = GridCells.Adaptive(110.dp),
+    modifier = Modifier.fillMaxSize(),
+    contentPadding = PaddingValues(16.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    items(records, key = { it.id }) { record -> Thumbnail(record, onClick = { onClick(record) }) }
   }
 }
 

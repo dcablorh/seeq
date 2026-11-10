@@ -51,10 +51,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
   val indexProgress: StateFlow<IndexProgress> = graph.progress
 
+  private val _indexed = MutableStateFlow<List<PhotoRecord>>(emptyList())
+
+  /** Photos already in the index, newest first. Refreshes as the background job adds more. */
+  val indexed: StateFlow<List<PhotoRecord>> = _indexed
+
   private val queries = MutableStateFlow("")
 
   init {
     observeDownload()
+    viewModelScope.launch {
+      graph.progress.collectLatest { _indexed.value = withContext(Dispatchers.IO) { graph.index.newestFirst() } }
+    }
     // Wait for a pause in typing, then search; a newer query cancels the one still running.
     viewModelScope.launch {
       queries.debounce(300).collectLatest { runSearch(it) }
@@ -67,7 +75,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun startIndexing() {
-    if (_model.value == ModelState.Ready) IndexScheduler.runNow(getApplication())
+    // A running job keeps going; only start (or restart a stalled one) when nothing is indexing in this process.
+    if (_model.value == ModelState.Ready && !graph.progress.value.running) IndexScheduler.runNow(getApplication())
   }
 
   fun downloadModel() {

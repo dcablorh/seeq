@@ -33,6 +33,11 @@ class VectorIndexTest {
   }
 
   @Test
+  fun `newestFirst orders by date taken`() {
+    assertEquals(listOf(3L, 2L, 1L), filled().newestFirst().map { it.id })
+  }
+
+  @Test
   fun `duplicate ids are ignored`() {
     val index = filled()
     index.add(PhotoRecord(1, 9999), floatArrayOf(0f, 1f))

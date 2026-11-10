@@ -56,6 +56,10 @@ class VectorIndex private constructor(private val file: File, val dim: Int) {
     return removed
   }
 
+  /** Every indexed photo, most recently taken first. */
+  @Synchronized
+  fun newestFirst(): List<PhotoRecord> = records.sortedByDescending { it.takenMs }
+
   @Synchronized
   fun filter(accept: (PhotoRecord) -> Boolean): List<PhotoRecord> = records.filter(accept)
 
