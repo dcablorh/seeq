@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,8 +27,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.ui.res.painterResource
-import com.example.locallens.R
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -97,7 +94,7 @@ fun LocalLensScreen(modifier: Modifier = Modifier, viewModel: MainViewModel = vi
   }
 }
 
-/** Oversized wordmark with the eye logo mark. */
+/** Oversized wordmark. */
 @Composable
 private fun TopBar() {
   Row(
@@ -105,8 +102,6 @@ private fun TopBar() {
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Text("seeq", style = Display, color = Ink)
-    Spacer(Modifier.size(16.dp))
-    Image(painterResource(R.drawable.ic_seeq_eye), contentDescription = null)
   }
 }
 
