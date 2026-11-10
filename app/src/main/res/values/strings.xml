@@ -2,4 +2,6 @@
     <string name="app_name">seeq</string>
     <string name="download_channel">Model download</string>
     <string name="download_notification_title">Downloading search model</string>
+    <string name="index_channel">Photo indexing</string>
+    <string name="index_notification_title">Indexing your photos</string>
 </resources>

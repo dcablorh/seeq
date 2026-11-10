@@ -1,16 +1,11 @@
 package com.example.locallens.ml
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.ServiceInfo
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.Data
-import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.example.locallens.ProgressNotification
 import com.example.locallens.R
 import com.example.locallens.graph
 import com.example.locallens.index.IndexScheduler
@@ -48,24 +43,15 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
 
   private fun errorData(e: Exception): Data = workDataOf(KEY_ERROR to (e.message ?: "Download failed"))
 
-  private fun foregroundInfo(percent: Int): ForegroundInfo {
-    val manager = applicationContext.getSystemService(NotificationManager::class.java)
-    manager.createNotificationChannel(
-      NotificationChannel(CHANNEL, applicationContext.getString(R.string.download_channel), NotificationManager.IMPORTANCE_LOW),
-    )
-    val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
-      .setSmallIcon(android.R.drawable.stat_sys_download)
-      .setContentTitle(applicationContext.getString(R.string.download_notification_title))
-      .setOngoing(true)
-      .setOnlyAlertOnce(true)
-      .setProgress(100, percent.coerceAtLeast(0), percent < 0)
-      .build()
-    return if (Build.VERSION.SDK_INT >= 29) {
-      ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-    } else {
-      ForegroundInfo(NOTIFICATION_ID, notification)
-    }
-  }
+  private fun foregroundInfo(percent: Int) = ProgressNotification.foregroundInfo(
+    applicationContext,
+    notificationId = NOTIFICATION_ID,
+    channelId = CHANNEL,
+    channelName = R.string.download_channel,
+    title = R.string.download_notification_title,
+    current = percent.coerceAtLeast(0),
+    indeterminate = percent < 0,
+  )
 
   companion object {
     const val UNIQUE_NAME = "model-download"
