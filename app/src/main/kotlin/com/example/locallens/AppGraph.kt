@@ -31,7 +31,7 @@ val Context.graph: AppGraph
 class AppGraph(context: Context) {
   val models = ModelManager(File(context.filesDir, "models"))
   val gallery = MediaStoreSource(context.contentResolver)
-  val index: VectorIndex by lazy { VectorIndex.load(File(context.filesDir, "index.bin"), VectorMath.TARGET_DIM) }
+  val index: VectorIndex by lazy { VectorIndex.load(File(context.filesDir, "index-v${LiteRtEmbedder.VISION_TOKENS_PER_IMAGE}.bin"), VectorMath.TARGET_DIM) }
 
   private val _progress = MutableStateFlow(IndexProgress())
   val progress: StateFlow<IndexProgress> = _progress
