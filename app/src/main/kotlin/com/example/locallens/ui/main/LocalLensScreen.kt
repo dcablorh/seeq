@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -201,20 +203,50 @@ private fun ReadyContent(viewModel: MainViewModel) {
         Message("Describe what you're looking for, like \"blue car at night\" or \"receipt from August 5\".")
       search.query.isBlank() -> {
         EyebrowText("${indexed.size} photos indexed", modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
-        PhotoGrid(indexed) { openPhoto(context, it) }
+        PhotoGrid(indexed, modifier = Modifier.fillMaxSize()) { openPhoto(context, it) }
       }
       search.results.isEmpty() && !search.searching ->
         Message(if (progress.running) "No matches yet. Still indexing, so results will improve." else "No matches found.")
-      else -> PhotoGrid(search.results) { openPhoto(context, it) }
+      else -> SearchResultsContent(search.results, context)
     }
   }
 }
 
 @Composable
-private fun PhotoGrid(records: List<PhotoRecord>, onClick: (PhotoRecord) -> Unit) {
+private fun SearchResultsContent(results: List<PhotoRecord>, context: android.content.Context) {
+  Column(Modifier.fillMaxSize()) {
+    // --- Carousel (top 20 results) ---
+    val topResults = results.take(20)
+    if (topResults.isNotEmpty()) {
+      Spacer(Modifier.height(8.dp))
+      EyebrowText(
+        "Top matches",
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+      )
+      CircularCarousel(
+        photos = topResults,
+        onPhotoClick = { openPhoto(context, it) },
+        modifier = Modifier.padding(vertical = 6.dp),
+      )
+    }
+
+    // --- All results grid ---
+    if (results.isNotEmpty()) {
+      Spacer(Modifier.height(8.dp))
+      EyebrowText(
+        "${results.size} results",
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+      )
+      PhotoGrid(results, modifier = Modifier.weight(1f)) { openPhoto(context, it) }
+    }
+  }
+}
+
+@Composable
+private fun PhotoGrid(records: List<PhotoRecord>, modifier: Modifier = Modifier, onClick: (PhotoRecord) -> Unit) {
   LazyVerticalStaggeredGrid(
     columns = StaggeredGridCells.Fixed(2),
-    modifier = Modifier.fillMaxSize(),
+    modifier = modifier,
     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
     horizontalArrangement = Arrangement.spacedBy(12.dp),
     verticalItemSpacing = 12.dp,
