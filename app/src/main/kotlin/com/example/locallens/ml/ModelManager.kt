@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
+/** The server answered, but not with the file; retrying the same request will not help. */
+class HttpStatusException(val code: Int) : IOException("Download failed: HTTP $code")
+
 /** Downloads the embedding model once into app-private storage. After that the app needs no network. */
 class ModelManager(private val dir: File) {
   val modelFile = File(dir, MODEL_NAME)
@@ -17,7 +20,7 @@ class ModelManager(private val dir: File) {
   fun isReady(): Boolean = modelFile.exists() && modelFile.length() > 0
 
   /** Resumes a partial download if one exists. [onProgress] gets (bytesSoFar, totalBytes or -1). */
-  suspend fun download(onProgress: (Long, Long) -> Unit) = withContext(Dispatchers.IO) {
+  suspend fun download(onProgress: suspend (Long, Long) -> Unit) = withContext(Dispatchers.IO) {
     dir.mkdirs()
     val resumeFrom = if (partFile.exists()) partFile.length() else 0L
     val connection = URL(MODEL_URL).openConnection() as HttpURLConnection
@@ -27,7 +30,7 @@ class ModelManager(private val dir: File) {
       if (resumeFrom > 0) connection.setRequestProperty("Range", "bytes=$resumeFrom-")
       val code = connection.responseCode
       val resuming = code == HttpURLConnection.HTTP_PARTIAL
-      if (code != HttpURLConnection.HTTP_OK && !resuming) throw IOException("Download failed: HTTP $code")
+      if (code != HttpURLConnection.HTTP_OK && !resuming) throw HttpStatusException(code)
 
       val start = if (resuming) resumeFrom else 0L
       val length = connection.contentLengthLong

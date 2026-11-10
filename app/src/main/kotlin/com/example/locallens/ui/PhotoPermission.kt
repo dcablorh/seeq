@@ -72,7 +72,7 @@ fun PhotoPermissionScreen(onResult: () -> Unit, modifier: Modifier = Modifier) {
     Text("Find any photo by typing", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
     Text(
       when (state) {
-        AskState.First -> "LocalLens reads your photos on this phone to build a private search index. Nothing leaves your device."
+        AskState.First -> "seeq reads your photos on this phone to build a private search index. Nothing leaves your device."
         AskState.Rationale -> "Without photo access there is nothing to search. Your photos stay on this device."
         AskState.PermanentlyDenied -> "Photo access is turned off. Turn it on in Settings to use search."
       },

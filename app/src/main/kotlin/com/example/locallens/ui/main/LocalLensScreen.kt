@@ -1,9 +1,14 @@
 package com.example.locallens.ui.main
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Size
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -71,7 +77,7 @@ fun LocalLensScreen(modifier: Modifier = Modifier, viewModel: MainViewModel = vi
 
   Scaffold(
     modifier = modifier,
-    topBar = { CenterAlignedTopAppBar(title = { Text("LocalLens") }) },
+    topBar = { CenterAlignedTopAppBar(title = { Text("seeq") }) },
   ) { innerPadding ->
     Box(Modifier.padding(innerPadding).fillMaxSize()) {
       if (!hasAccess) {
@@ -91,7 +97,22 @@ private fun SearchContent(viewModel: MainViewModel) {
       LaunchedEffect(Unit) { viewModel.startIndexing() }
       ReadyContent(viewModel)
     }
-    else -> ModelSetup(state, onDownload = viewModel::downloadModel)
+    else -> {
+      val context = LocalContext.current
+      // The notification only shows download progress; the download runs even if it is denied.
+      val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.downloadModel()
+      }
+      ModelSetup(
+        state,
+        onDownload = {
+          val needsAsk = Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+              PackageManager.PERMISSION_GRANTED
+          if (needsAsk) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else viewModel.downloadModel()
+        },
+      )
+    }
   }
 }
 
@@ -104,7 +125,7 @@ private fun ModelSetup(state: ModelState, onDownload: () -> Unit) {
   ) {
     Text("One-time setup", style = MaterialTheme.typography.headlineSmall)
     Text(
-      "LocalLens needs to download its on-device search model, about 500 MB. Use Wi-Fi. " +
+      "seeq needs to download its on-device search model, about 500 MB. Use Wi-Fi. " +
         "After this, search works with no internet connection.",
       textAlign = TextAlign.Center,
     )

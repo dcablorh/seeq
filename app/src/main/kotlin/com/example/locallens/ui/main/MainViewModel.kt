@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.locallens.IndexProgress
 import com.example.locallens.data.PhotoRecord
 import com.example.locallens.graph
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.example.locallens.index.IndexScheduler
+import com.example.locallens.ml.ModelDownloadWorker
 import com.example.locallens.search.SearchEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -50,9 +52,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   val indexProgress: StateFlow<IndexProgress> = graph.progress
 
   private val queries = MutableStateFlow("")
-  private var downloadJob: Job? = null
 
   init {
+    observeDownload()
     // Wait for a pause in typing, then search; a newer query cancels the one still running.
     viewModelScope.launch {
       queries.debounce(300).collectLatest { runSearch(it) }
@@ -69,20 +71,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun downloadModel() {
-    if (downloadJob?.isActive == true) return
     _model.value = ModelState.Downloading(null)
-    downloadJob = viewModelScope.launch {
-      try {
-        graph.models.download { done, total ->
-          _model.value = ModelState.Downloading(if (total > 0) done.toFloat() / total else null)
+    IndexScheduler.downloadModel(getApplication())
+  }
+
+  /** The download runs in a background worker; this just mirrors its state, so it survives leaving the app. */
+  private fun observeDownload() {
+    viewModelScope.launch {
+      WorkManager.getInstance(getApplication<Application>())
+        .getWorkInfosForUniqueWorkFlow(ModelDownloadWorker.UNIQUE_NAME)
+        .collect { infos ->
+          if (graph.models.isReady()) {
+            _model.value = ModelState.Ready
+            return@collect
+          }
+          val info = infos.firstOrNull() ?: return@collect
+          _model.value = when (info.state) {
+            WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING, WorkInfo.State.BLOCKED -> {
+              val percent = info.progress.getInt(ModelDownloadWorker.KEY_PERCENT, -1)
+              ModelState.Downloading(if (percent >= 0) percent / 100f else null)
+            }
+            WorkInfo.State.FAILED ->
+              ModelState.Failed(info.outputData.getString(ModelDownloadWorker.KEY_ERROR) ?: "Download failed")
+            WorkInfo.State.CANCELLED, WorkInfo.State.SUCCEEDED -> ModelState.Missing
+          }
         }
-        _model.value = ModelState.Ready
-        startIndexing()
-      } catch (e: CancellationException) {
-        throw e
-      } catch (e: Exception) {
-        _model.value = ModelState.Failed(e.message ?: "Download failed")
-      }
     }
   }
 
