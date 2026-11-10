@@ -15,7 +15,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import com.example.locallens.ui.theme.EyebrowText
+import com.example.locallens.ui.theme.InkButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 
@@ -67,27 +67,27 @@ fun PhotoPermissionScreen(onResult: () -> Unit, modifier: Modifier = Modifier) {
   Column(
     modifier = modifier.fillMaxSize().padding(24.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    horizontalAlignment = Alignment.CenterHorizontally,
+    horizontalAlignment = Alignment.Start,
   ) {
-    Text("Find any photo by typing", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+    EyebrowText("Private by design")
+    Text("Find any photo by typing", style = MaterialTheme.typography.headlineSmall)
     Text(
       when (state) {
         AskState.First -> "seeq reads your photos on this phone to build a private search index. Nothing leaves your device."
         AskState.Rationale -> "Without photo access there is nothing to search. Your photos stay on this device."
         AskState.PermanentlyDenied -> "Photo access is turned off. Turn it on in Settings to use search."
       },
-      textAlign = TextAlign.Center,
     )
     if (state == AskState.PermanentlyDenied) {
-      Button(onClick = {
+      InkButton("Open Settings", onClick = {
         context.startActivity(
           Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", context.packageName, null)
           },
         )
-      }) { Text("Open Settings") }
+      })
     } else {
-      Button(onClick = { launcher.launch(photoPermissions()) }) { Text("Allow photo access") }
+      InkButton("Allow photo access", onClick = { launcher.launch(photoPermissions()) })
     }
   }
 }

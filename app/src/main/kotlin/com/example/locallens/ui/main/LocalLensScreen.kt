@@ -11,27 +11,27 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.ui.res.painterResource
+import com.example.locallens.R
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,12 +44,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -59,12 +58,20 @@ import com.example.locallens.data.PhotoRecord
 import com.example.locallens.data.uri
 import com.example.locallens.ui.PhotoPermissionScreen
 import com.example.locallens.ui.hasPhotoAccess
+import com.example.locallens.ui.theme.CardShape
+import com.example.locallens.ui.theme.Display
+import com.example.locallens.ui.theme.EyebrowText
+import com.example.locallens.ui.theme.Hairline
+import com.example.locallens.ui.theme.Ink
+import com.example.locallens.ui.theme.InkButton
+import com.example.locallens.ui.theme.Mist
+import com.example.locallens.ui.theme.PillSearchBar
+import com.example.locallens.ui.theme.paperGrid
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalLensScreen(modifier: Modifier = Modifier, viewModel: MainViewModel = viewModel()) {
   val context = LocalContext.current
@@ -76,8 +83,9 @@ fun LocalLensScreen(modifier: Modifier = Modifier, viewModel: MainViewModel = vi
   }
 
   Scaffold(
-    modifier = modifier,
-    topBar = { CenterAlignedTopAppBar(title = { Text("seeq") }) },
+    modifier = modifier.paperGrid(),
+    containerColor = Color.Transparent,
+    topBar = { TopBar() },
   ) { innerPadding ->
     Box(Modifier.padding(innerPadding).fillMaxSize()) {
       if (!hasAccess) {
@@ -86,6 +94,19 @@ fun LocalLensScreen(modifier: Modifier = Modifier, viewModel: MainViewModel = vi
         SearchContent(viewModel)
       }
     }
+  }
+}
+
+/** Oversized wordmark with the eye logo mark. */
+@Composable
+private fun TopBar() {
+  Row(
+    Modifier.fillMaxWidth().statusBarsPadding().padding(start = 24.dp, end = 24.dp, top = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text("seeq", style = Display, color = Ink)
+    Spacer(Modifier.size(16.dp))
+    Image(painterResource(R.drawable.ic_seeq_eye), contentDescription = null)
   }
 }
 
@@ -121,29 +142,34 @@ private fun ModelSetup(state: ModelState, onDownload: () -> Unit) {
   Column(
     modifier = Modifier.fillMaxSize().padding(24.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    horizontalAlignment = Alignment.CenterHorizontally,
+    horizontalAlignment = Alignment.Start,
   ) {
-    Text("One-time setup", style = MaterialTheme.typography.headlineSmall)
+    EyebrowText("One-time setup")
+    Text("Download the search model", style = MaterialTheme.typography.headlineSmall)
     Text(
       "seeq needs to download its on-device search model, about 500 MB. Use Wi-Fi. " +
         "After this, search works with no internet connection.",
-      textAlign = TextAlign.Center,
     )
     when (state) {
       is ModelState.Downloading -> {
         val fraction = state.fraction
         if (fraction != null) {
-          LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-          Text("${(fraction * 100).toInt()}%")
+          LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier.fillMaxWidth(),
+            color = Ink,
+            trackColor = Mist,
+          )
+          EyebrowText("${(fraction * 100).toInt()}%")
         } else {
-          LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+          LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Ink, trackColor = Mist)
         }
       }
       is ModelState.Failed -> {
-        Text(state.message, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
-        Button(onClick = onDownload) { Text("Try again") }
+        Text(state.message, color = MaterialTheme.colorScheme.error)
+        InkButton("Try again", onClick = onDownload)
       }
-      else -> Button(onClick = onDownload) { Text("Download model") }
+      else -> InkButton("Download model", onClick = onDownload)
     }
   }
 }
@@ -156,21 +182,20 @@ private fun ReadyContent(viewModel: MainViewModel) {
   val context = LocalContext.current
 
   Column(Modifier.fillMaxSize()) {
-    OutlinedTextField(
+    PillSearchBar(
       value = search.query,
       onValueChange = viewModel::onQueryChange,
-      modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-      placeholder = { Text("Search your photos") },
-      singleLine = true,
-      keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-      keyboardActions = KeyboardActions(onSearch = {}),
+      placeholder = "Search your photos",
+      modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
     )
     if (progress.running && progress.total > 0) {
-      Column(Modifier.padding(horizontal = 16.dp)) {
-        Text("Indexing photos ${progress.done} of ${progress.total}", style = MaterialTheme.typography.bodySmall)
+      Column(Modifier.padding(horizontal = 24.dp)) {
+        EyebrowText("Indexing photos ${progress.done} of ${progress.total}")
         LinearProgressIndicator(
           progress = { progress.done.toFloat() / progress.total },
-          modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+          modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+          color = Ink,
+          trackColor = Mist,
         )
       }
     }
@@ -180,12 +205,7 @@ private fun ReadyContent(viewModel: MainViewModel) {
       search.query.isBlank() && indexed.isEmpty() ->
         Message("Describe what you're looking for, like \"blue car at night\" or \"receipt from August 5\".")
       search.query.isBlank() -> {
-        Text(
-          "${indexed.size} photos indexed. Describe what you're looking for to search them.",
-          modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        EyebrowText("${indexed.size} photos indexed", modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
         PhotoGrid(indexed) { openPhoto(context, it) }
       }
       search.results.isEmpty() && !search.searching ->
@@ -197,12 +217,12 @@ private fun ReadyContent(viewModel: MainViewModel) {
 
 @Composable
 private fun PhotoGrid(records: List<PhotoRecord>, onClick: (PhotoRecord) -> Unit) {
-  LazyVerticalGrid(
-    columns = GridCells.Adaptive(110.dp),
+  LazyVerticalStaggeredGrid(
+    columns = StaggeredGridCells.Fixed(2),
     modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(16.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp),
+    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+    horizontalArrangement = Arrangement.spacedBy(12.dp),
+    verticalItemSpacing = 12.dp,
   ) {
     items(records, key = { it.id }) { record -> Thumbnail(record, onClick = { onClick(record) }) }
   }
@@ -210,14 +230,16 @@ private fun PhotoGrid(records: List<PhotoRecord>, onClick: (PhotoRecord) -> Unit
 
 @Composable
 private fun Message(text: String, isError: Boolean = false) {
-  Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+  Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.TopStart) {
     Text(
       text,
-      textAlign = TextAlign.Center,
-      color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+      color = if (isError) MaterialTheme.colorScheme.error else Ink,
     )
   }
 }
+
+// Stable per-photo ratios give the loose, uneven polaroid layout.
+private val ThumbnailRatios = floatArrayOf(1f, 0.8f, 1.25f, 0.9f, 1.1f)
 
 @Composable
 private fun Thumbnail(record: PhotoRecord, onClick: () -> Unit) {
@@ -233,9 +255,10 @@ private fun Thumbnail(record: PhotoRecord, onClick: () -> Unit) {
   }
   Box(
     Modifier
-      .aspectRatio(1f)
-      .clip(RoundedCornerShape(8.dp))
-      .background(MaterialTheme.colorScheme.surfaceVariant)
+      .aspectRatio(ThumbnailRatios[(record.id.hashCode() and Int.MAX_VALUE) % ThumbnailRatios.size])
+      .clip(CardShape)
+      .background(Mist)
+      .border(1.dp, Hairline, CardShape)
       .clickable(onClick = onClick),
   ) {
     bitmap?.let {
