@@ -21,7 +21,7 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
     val models = applicationContext.graph.models
     if (models.isReady()) return Result.success()
 
-    setForeground(foregroundInfo(percent = -1))
+    setForeground(notification.foregroundInfo(indeterminate = true))
     var lastPercent = -1
     try {
       models.download { done, total ->
@@ -29,7 +29,7 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
         if (percent != lastPercent) {
           lastPercent = percent
           setProgress(workDataOf(KEY_PERCENT to percent))
-          setForeground(foregroundInfo(percent))
+          notification.update(current = percent.coerceAtLeast(0), indeterminate = percent < 0)
         }
       }
     } catch (e: HttpStatusException) {
@@ -43,14 +43,12 @@ class ModelDownloadWorker(context: Context, params: WorkerParameters) : Coroutin
 
   private fun errorData(e: Exception): Data = workDataOf(KEY_ERROR to (e.message ?: "Download failed"))
 
-  private fun foregroundInfo(percent: Int) = ProgressNotification.foregroundInfo(
+  private val notification = ProgressNotification(
     applicationContext,
     notificationId = NOTIFICATION_ID,
     channelId = CHANNEL,
     channelName = R.string.download_channel,
     title = R.string.download_notification_title,
-    current = percent.coerceAtLeast(0),
-    indeterminate = percent < 0,
   )
 
   companion object {
