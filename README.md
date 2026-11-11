@@ -16,22 +16,23 @@ with no internet connection.
 ## Contents
 
 1. [What it does](#what-it-does)
-2. [How it works, in one picture](#how-it-works-in-one-picture)
-3. [Tech stack](#tech-stack)
-4. [The models](#the-models)
-5. [How embedding works](#how-embedding-works)
-6. [The indexing pipeline](#the-indexing-pipeline)
-7. [The search pipeline](#the-search-pipeline)
-8. [The index file](#the-index-file)
-9. [Model download](#model-download)
-10. [Permissions](#permissions)
-11. [Project structure](#project-structure)
-12. [Build, run and test](#build-run-and-test)
-13. [Measured performance](#measured-performance)
-14. [Design decisions and history](#design-decisions-and-history)
-15. [Limitations and known issues](#limitations-and-known-issues)
-16. [Troubleshooting](#troubleshooting)
-17. [Licences and credits](#licences-and-credits)
+2. [First run](#first-run)
+3. [How it works, in one picture](#how-it-works-in-one-picture)
+4. [Tech stack](#tech-stack)
+5. [The models](#the-models)
+6. [How embedding works](#how-embedding-works)
+7. [The indexing pipeline](#the-indexing-pipeline)
+8. [The search pipeline](#the-search-pipeline)
+9. [The index file](#the-index-file)
+10. [Model download](#model-download)
+11. [Permissions](#permissions)
+12. [Project structure](#project-structure)
+13. [Build, run and test](#build-run-and-test)
+14. [Measured performance](#measured-performance)
+15. [Design decisions and history](#design-decisions-and-history)
+16. [Limitations and known issues](#limitations-and-known-issues)
+17. [Troubleshooting](#troubleshooting)
+18. [Licences and credits](#licences-and-credits)
 
 ---
 
@@ -47,8 +48,29 @@ with no internet connection.
 - **Shows what it has indexed.** With an empty search box the home screen lists the indexed photos, newest first,
   with a count.
 - **Presents results two ways.** The top 20 matches appear in a 3D circular carousel, and all results (up to 60)
-  appear in a two-column staggered grid below it. Tapping a photo opens it in your gallery app.
+  appear in a two-column staggered grid below it. Tapping a photo opens it in your gallery app. Scrolling the grid
+  forward collapses the carousel so the grid gets the whole screen, and scrolling back brings it straight back.
+- **Walks you through first launch.** A short flow explains what seeq does, asks for photo access and starts the
+  one-time model download. Steps that are already done are skipped. See [First run](#first-run).
 - **Is private by design.** The only network traffic is the one-time model download from Hugging Face.
+
+---
+
+## First run
+
+On first launch seeq shows a three-step flow (`OnboardingFlow`). Every step uses the same layout (`StepLayout`: a
+small label, a headline, body text, and the action pinned to the bottom of the screen).
+
+| Step | What you see | What happens |
+| --- | --- | --- |
+| Welcome | "Find any photo by typing." with a demo search bar reading "car at night" and four sample photos | **Continue** moves on |
+| Photo access | "Your photos never leave this phone." and three reassurances: the index is stored on the device, there is no upload and no account, and it works offline after setup | **Allow photo access** asks for permission. If you refuse, it explains why, and after a second refusal offers **Open Settings** |
+| Model download | The size (about 155 MB), that it runs on this phone, and that the network is needed once | **Download model** starts the job, shows progress, and offers **Try again** if it stops (progress is kept) |
+
+- Steps that are already done are skipped, for example the photo step when access is already granted.
+- The flow ends as soon as the model is ready. A flag (`onboarded` in the app's `seeq` preferences) stops it showing
+  again, and anyone who already has photo access and the model skips it entirely.
+- The download keeps going in a notification if you lock the screen.
 
 ---
 
@@ -241,7 +263,9 @@ delay is short and linear.
 4. `VectorIndex.search` scores every photo that passes the date filter against the query vector and keeps the top 60
    in a bounded min-heap, so it never sorts the whole index.
 5. The ViewModel publishes the result. The UI shows the top 20 in the carousel and all 60 in the grid, or "No matches"
-   with a hint if indexing is still running.
+   with a hint if indexing is still running. The carousel is a collapsing header: a nested-scroll connection hides it
+   as the grid scrolls forward and shows it again on any scroll back, and when you let go it settles fully hidden or
+   fully shown, never half-way.
 
 The search is an exact brute-force scan. At 512 dimensions a library of 2,650 photos is about 1.4 million
 multiply-adds per query, which takes a few milliseconds, so no approximate index is needed.
@@ -298,7 +322,7 @@ on first use.
 | `POST_NOTIFICATIONS` (Android 13+) | Show the progress notification. Without it the job still runs, but a visible notification helps stop phones from pausing the app |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Lets you exempt seeq from battery optimisation so indexing is not paused in the background |
 
-The app asks for photo access first. Once the model is ready, a "Keep indexing in the background" card offers the
+The app asks for photo access first, as the second step of [First run](#first-run). Once the model is ready, a "Keep indexing in the background" card offers the
 notification and battery permissions and disappears when both are granted. Photo access is re-checked every time you
 return to the app, because it can be revoked in Settings at any moment. While indexing runs with the app in front, the
 screen is kept awake.
@@ -335,10 +359,11 @@ seeq/
     │       │   ├── QueryParser.kt        pulls dates out of the query
     │       │   └── SearchEngine.kt       date filter plus vector search
     │       └── ui/
-    │           ├── PhotoPermission.kt    photo access screen
+    │           ├── PhotoPermission.kt    photo access step
     │           ├── BackgroundAccess.kt   notification and battery prompts
-    │           ├── main/                 LocalLensScreen, MainViewModel, CircularCarousel
-    │           └── theme/                colours, type, shared components
+    │           ├── main/                 LocalLensScreen, MainViewModel, CircularCarousel,
+    │           │                         Onboarding (first-run flow), ModelSetup (download step)
+    │           └── theme/                colours, type, shared components (StepLayout, InfoRow, BulletRow)
     └── test/kotlin/com/example/locallens
         ├── data/VectorIndexTest.kt       8 tests
         ├── ml/ClipTokenizerTest.kt       5 tests, against the real vocabulary
