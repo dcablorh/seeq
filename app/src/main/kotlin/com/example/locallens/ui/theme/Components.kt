@@ -4,15 +4,25 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -50,11 +60,69 @@ fun InkButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) 
     text.uppercase(),
     style = Label,
     color = Paper,
+    textAlign = TextAlign.Center,
     modifier = modifier
       .background(Ink, ButtonShape)
       .clickable(onClick = onClick)
-      .padding(horizontal = 20.dp, vertical = 10.dp),
+      .padding(horizontal = 20.dp, vertical = 12.dp),
   )
+}
+
+/** Shared layout of the setup steps: eyebrow, headline, body content, then the actions pinned to the bottom. */
+@Composable
+fun StepLayout(
+  eyebrow: String,
+  headline: String,
+  modifier: Modifier = Modifier,
+  // Turn off when the content already fills the space with its own weighted child.
+  pushActionsDown: Boolean = true,
+  actions: @Composable ColumnScope.() -> Unit = {},
+  content: @Composable ColumnScope.() -> Unit,
+) {
+  Column(
+    modifier = modifier.fillMaxSize().padding(24.dp),
+    verticalArrangement = Arrangement.spacedBy(24.dp),
+    horizontalAlignment = Alignment.Start,
+  ) {
+    EyebrowText(eyebrow)
+    Text(
+      headline,
+      style = MaterialTheme.typography.headlineSmall.copy(fontSize = 32.sp, lineHeight = 36.sp),
+      color = Ink,
+    )
+    content()
+    if (pushActionsDown) Spacer(Modifier.weight(1f))
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), content = actions)
+  }
+}
+
+/** A mono label and value separated by hairlines, like a spec sheet. */
+@Composable
+fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
+  Row(
+    modifier.fillMaxWidth().drawBehind {
+      drawLine(Hairline, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
+    }.padding(vertical = 14.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+  ) {
+    EyebrowText(label)
+    EyebrowText(value)
+  }
+}
+
+/** A line of body text led by a small green status dot. */
+@Composable
+fun BulletRow(text: String, modifier: Modifier = Modifier) {
+  Row(
+    modifier.fillMaxWidth().drawBehind {
+      drawLine(Hairline, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
+    }.padding(vertical = 16.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    Box(Modifier.size(8.dp).background(SignalGreen, CircleShape))
+    Text(text, style = MaterialTheme.typography.bodyLarge, color = Ink)
+  }
 }
 
 /** Ghost action: tracked mono text with no fill or border. */
@@ -81,6 +149,7 @@ fun PillSearchBar(
   placeholder: String,
   modifier: Modifier = Modifier,
   onSearch: () -> Unit = {},
+  enabled: Boolean = true,
 ) {
   Row(
     modifier = modifier
@@ -95,6 +164,7 @@ fun PillSearchBar(
       value = value,
       onValueChange = onValueChange,
       modifier = Modifier.weight(1f),
+      enabled = enabled,
       singleLine = true,
       textStyle = LabelLarge.copy(color = Ink),
       cursorBrush = SolidColor(Ink),
