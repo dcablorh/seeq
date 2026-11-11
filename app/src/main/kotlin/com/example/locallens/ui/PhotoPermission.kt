@@ -11,12 +11,11 @@ import android.provider.Settings
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import com.example.locallens.ui.theme.EyebrowText
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.example.locallens.ui.theme.BulletRow
 import com.example.locallens.ui.theme.InkButton
+import com.example.locallens.ui.theme.StepLayout
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,9 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 
 /** Permissions to ask for, by Android version. Android 14 also lets the user share only some photos. */
@@ -48,7 +45,7 @@ private enum class AskState { First, Rationale, PermanentlyDenied }
 
 /** Explains why photo access is needed and walks through ask, rationale, and "open Settings". */
 @Composable
-fun PhotoPermissionScreen(onResult: () -> Unit, modifier: Modifier = Modifier) {
+fun PhotoPermissionScreen(onResult: () -> Unit, modifier: Modifier = Modifier, step: String? = null) {
   val context = androidx.compose.ui.platform.LocalContext.current
   val activity: Activity? = LocalActivity.current
   var state by remember { mutableStateOf(AskState.First) }
@@ -64,30 +61,40 @@ fun PhotoPermissionScreen(onResult: () -> Unit, modifier: Modifier = Modifier) {
     }
   }
 
-  Column(
-    modifier = modifier.fillMaxSize().padding(24.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    horizontalAlignment = Alignment.Start,
+  StepLayout(
+    eyebrow = listOfNotNull(step, "Private by design").joinToString(" · "),
+    headline = "Your photos never leave this phone.",
+    modifier = modifier,
+    actions = {
+      if (state == AskState.PermanentlyDenied) {
+        InkButton("Open Settings", modifier = Modifier.fillMaxWidth(), onClick = {
+          context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = Uri.fromParts("package", context.packageName, null)
+            },
+          )
+        })
+      } else {
+        InkButton(
+          "Allow photo access",
+          modifier = Modifier.fillMaxWidth(),
+          onClick = { launcher.launch(photoPermissions()) },
+        )
+      }
+    },
   ) {
-    EyebrowText("Private by design")
-    Text("Find any photo by typing", style = MaterialTheme.typography.headlineSmall)
     Text(
       when (state) {
-        AskState.First -> "seeq reads your photos on this phone to build a private search index. Nothing leaves your device."
+        AskState.First -> "seeq reads your photos on this device to build a private search index."
         AskState.Rationale -> "Without photo access there is nothing to search. Your photos stay on this device."
         AskState.PermanentlyDenied -> "Photo access is turned off. Turn it on in Settings to use search."
       },
+      style = MaterialTheme.typography.bodyLarge,
     )
-    if (state == AskState.PermanentlyDenied) {
-      InkButton("Open Settings", onClick = {
-        context.startActivity(
-          Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", context.packageName, null)
-          },
-        )
-      })
-    } else {
-      InkButton("Allow photo access", onClick = { launcher.launch(photoPermissions()) })
+    Column {
+      BulletRow("Search index stored on device")
+      BulletRow("No upload, no account")
+      BulletRow("Works offline after setup")
     }
   }
 }
