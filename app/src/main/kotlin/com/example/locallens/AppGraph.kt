@@ -5,9 +5,10 @@ import android.content.Context
 import com.example.locallens.data.MediaStoreSource
 import com.example.locallens.data.VectorIndex
 import com.example.locallens.index.IndexScheduler
+import com.example.locallens.ml.ClipTokenizer
 import com.example.locallens.ml.Embedder
-import com.example.locallens.ml.LiteRtEmbedder
 import com.example.locallens.ml.ModelManager
+import com.example.locallens.ml.OnnxEmbedder
 import com.example.locallens.ml.VectorMath
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,10 +29,17 @@ val Context.graph: AppGraph
   get() = (applicationContext as LocalLensApp).graph
 
 /** Shared app singletons: model files, the vector index, the embedder and indexing progress. */
-class AppGraph(context: Context) {
+class AppGraph(private val context: Context) {
   val models = ModelManager(File(context.filesDir, "models"))
   val gallery = MediaStoreSource(context.contentResolver)
-  val index: VectorIndex by lazy { VectorIndex.load(File(context.filesDir, "index-v${LiteRtEmbedder.VISION_TOKENS_PER_IMAGE}.bin"), VectorMath.TARGET_DIM) }
+
+  /** Named for the model, because vectors from different models cannot be compared with each other. */
+  val index: VectorIndex by lazy {
+    // Indexes written for the earlier EmbeddingGemma model are unusable now; drop them.
+    context.filesDir.listFiles { file -> file.name.startsWith("index") && file.name != INDEX_FILE && file.name != "$INDEX_FILE.tmp" }
+      ?.forEach { it.delete() }
+    VectorIndex.load(File(context.filesDir, INDEX_FILE), VectorMath.TARGET_DIM)
+  }
 
   private val _progress = MutableStateFlow(IndexProgress())
   val progress: StateFlow<IndexProgress> = _progress
@@ -42,7 +50,12 @@ class AppGraph(context: Context) {
 
   private var embedderInstance: Embedder? = null
 
-  /** The model is loaded on first use and kept for the life of the process. */
+  /** The models are loaded on first use and kept for the life of the process. */
   @Synchronized
-  fun embedder(): Embedder = embedderInstance ?: LiteRtEmbedder(models.modelFile.absolutePath).also { embedderInstance = it }
+  fun embedder(): Embedder = embedderInstance
+    ?: OnnxEmbedder(models.visionFile, models.textFile, ClipTokenizer.fromAssets(context)).also { embedderInstance = it }
+
+  private companion object {
+    const val INDEX_FILE = "index-clip-b32.bin"
+  }
 }

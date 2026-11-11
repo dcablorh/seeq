@@ -144,7 +144,7 @@ private fun ModelSetup(state: ModelState, onDownload: () -> Unit) {
     EyebrowText("One-time setup")
     Text("Download the search model", style = MaterialTheme.typography.headlineSmall)
     Text(
-      "seeq needs to download its on-device search model, about 500 MB. Use Wi-Fi. " +
+      "seeq needs to download its on-device search model, about 155 MB. Use Wi-Fi. " +
         "After this, search works with no internet connection.",
     )
     when (state) {

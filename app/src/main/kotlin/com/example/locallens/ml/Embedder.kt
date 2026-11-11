@@ -1,85 +1,84 @@
 package com.example.locallens.ml
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import android.graphics.Bitmap
 import android.util.Log
-import com.google.ai.edge.litertlm.Backend
-import com.google.ai.edge.litertlm.EmbeddingEngine
-import com.google.ai.edge.litertlm.EmbeddingEngineConfig
-import com.google.ai.edge.litertlm.InputData
-import java.util.concurrent.Executors
-import kotlinx.coroutines.asCoroutineDispatcher
+import java.io.File
+import java.nio.FloatBuffer
+import java.nio.LongBuffer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Turns text and images into unit-length vectors in one shared space. */
 interface Embedder : AutoCloseable {
   suspend fun embedText(query: String): FloatArray
 
-  suspend fun embedImage(jpeg: ByteArray): FloatArray
+  suspend fun embedImage(bitmap: Bitmap): FloatArray
 }
 
 /**
- * EmbeddingGemma 2 on-device through LiteRT-LM. One thread owns the engine because creating, using and
- * closing it must all happen on the same thread; loading the weights blocks for seconds.
+ * OpenAI CLIP ViT-B/32 on-device through ONNX Runtime: one model for photos, one for text, both 8-bit quantised.
+ * A session is created on first use, because that reads and optimises the whole model.
  */
-class LiteRtEmbedder(private val modelPath: String) : Embedder {
-  private val executor = Executors.newSingleThreadExecutor()
-  private val dispatcher = executor.asCoroutineDispatcher()
-  private var engine: EmbeddingEngine? = null
-
-  override suspend fun embedText(query: String): FloatArray = withContext(dispatcher) {
-    // Queries use the search-query prefix; the model card says to trim before prefixing.
-    val raw = engine().computeEmbedding(listOf(InputData.Text("task: search query | text: ${query.trim()}"))).embedding
-    VectorMath.truncateAndNormalize(raw)
+class OnnxEmbedder(visionModel: File, textModel: File, private val tokenizer: ClipTokenizer) : Embedder {
+  private val env = OrtEnvironment.getEnvironment()
+  private val options = OrtSession.SessionOptions().apply {
+    setIntraOpNumThreads(THREADS)
+    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
   }
+  private val visionSession = lazy { open(visionModel, "vision") }
+  private val textSession = lazy { open(textModel, "text") }
 
-  override suspend fun embedImage(jpeg: ByteArray): FloatArray = withContext(dispatcher) {
-    val raw = engine().computeEmbedding(listOf(InputData.Image(jpeg))).embedding
-    VectorMath.truncateAndNormalize(raw)
-  }
-
-  /** Runs on the engine thread only. Tries the GPU first and falls back to the CPU. */
-  private fun engine(): EmbeddingEngine {
-    engine?.let { return it }
-    val started = System.nanoTime()
-    val created = try {
-      create(Backend.GPU()).also { Log.i(TAG, "engine on GPU in ${elapsedMs(started)} ms") }
-    } catch (e: Exception) {
-      Log.w(TAG, "GPU engine failed after ${elapsedMs(started)} ms, using CPU", e)
-      create(Backend.CPU()).also { Log.i(TAG, "engine on CPU in ${elapsedMs(started)} ms") }
+  override suspend fun embedText(query: String): FloatArray = withContext(Dispatchers.Default) {
+    val session = textSession.value
+    val ids = tokenizer.encode(query).map { it.toLong() }.toLongArray()
+    val shape = longArrayOf(1, ids.size.toLong())
+    val inputs = HashMap<String, OnnxTensor>()
+    try {
+      for (name in session.inputNames) {
+        val values = if ("mask" in name) LongArray(ids.size) { 1L } else ids
+        inputs[name] = OnnxTensor.createTensor(env, LongBuffer.wrap(values), shape)
+      }
+      session.run(inputs).use { VectorMath.truncateAndNormalize(it.embedding(session)) }
+    } finally {
+      inputs.values.forEach { it.close() }
     }
-    engine = created
-    return created
   }
 
-  private fun create(backend: Backend): EmbeddingEngine {
-    val config = EmbeddingEngineConfig(
-      modelPath = modelPath,
-      backend = backend,
-      visionBackend = backend,
-      visionTokensPerImage = VISION_TOKENS_PER_IMAGE,
-    )
-    val created = EmbeddingEngine(config)
-    // An engine whose initialize() threw must not be closed, so only keep it once this returns.
-    created.initialize()
-    return created
+  override suspend fun embedImage(bitmap: Bitmap): FloatArray = withContext(Dispatchers.Default) {
+    val session = visionSession.value
+    val data = ClipImage.toTensorData(bitmap)
+    val shape = longArrayOf(1, 3, ClipImage.SIZE.toLong(), ClipImage.SIZE.toLong())
+    OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape).use { pixels ->
+      session.run(mapOf(session.inputNames.first() to pixels)).use { VectorMath.truncateAndNormalize(it.embedding(session)) }
+    }
+  }
+
+  private fun open(model: File, label: String): OrtSession {
+    val started = System.nanoTime()
+    return env.createSession(model.absolutePath, options).also {
+      Log.i(TAG, "$label model ready in ${(System.nanoTime() - started) / 1_000_000} ms, inputs=${it.inputNames} outputs=${it.outputNames}")
+    }
+  }
+
+  /** The projected embedding, not the per-token hidden states that these exports also return. */
+  private fun OrtSession.Result.embedding(session: OrtSession): FloatArray {
+    val names = session.outputNames.toList()
+    val index = names.indexOfFirst { "embeds" in it }.takeIf { it >= 0 } ?: 0
+    val buffer = (get(index) as OnnxTensor).floatBuffer
+    return FloatArray(buffer.remaining()).also { buffer.get(it) }
   }
 
   override fun close() {
-    executor.execute {
-      engine?.close()
-      engine = null
-    }
-    executor.shutdown()
+    if (visionSession.isInitialized()) visionSession.value.close()
+    if (textSession.isInitialized()) textSession.value.close()
+    options.close()
   }
 
-  private fun elapsedMs(startNanos: Long) = (System.nanoTime() - startNanos) / 1_000_000
-
-  companion object {
-    private const val TAG = "seeq"
-
-    /**
-     * Fewer vision tokens per photo means much faster indexing at a small cost in detail. Changing this changes
-     * every image vector, so the index file name carries it and a new value starts a fresh index.
-     */
-    const val VISION_TOKENS_PER_IMAGE = 70
+  private companion object {
+    const val TAG = "seeq"
+    const val THREADS = 4
   }
 }

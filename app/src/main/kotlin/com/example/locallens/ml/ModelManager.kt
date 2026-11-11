@@ -1,6 +1,7 @@
 package com.example.locallens.ml
 
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -12,18 +13,32 @@ import kotlinx.coroutines.withContext
 /** The server answered, but not with the file; retrying the same request will not help. */
 class HttpStatusException(val code: Int) : IOException("Download failed: HTTP $code")
 
-/** Downloads the embedding model once into app-private storage. After that the app needs no network. */
+/** Downloads the two CLIP models once into app-private storage. After that the app needs no network. */
 class ModelManager(private val dir: File) {
-  val modelFile = File(dir, MODEL_NAME)
-  private val partFile = File(dir, "$MODEL_NAME.part")
+  val visionFile = File(dir, VISION_NAME)
+  val textFile = File(dir, TEXT_NAME)
 
-  fun isReady(): Boolean = modelFile.exists() && modelFile.length() > 0
+  fun isReady(): Boolean = visionFile.length() > 0 && textFile.length() > 0
 
-  /** Resumes a partial download if one exists. [onProgress] gets (bytesSoFar, totalBytes or -1). */
+  /** Resumes partial downloads. [onProgress] gets (bytes so far, total bytes) across both files. */
   suspend fun download(onProgress: suspend (Long, Long) -> Unit) = withContext(Dispatchers.IO) {
     dir.mkdirs()
+    val total = VISION_BYTES + TEXT_BYTES
+    var finished = 0L
+    for (model in listOf(Model(VISION_URL, visionFile, VISION_BYTES), Model(TEXT_URL, textFile, TEXT_BYTES))) {
+      if (model.file.length() == 0L) downloadFile(model.url, model.file) { onProgress(finished + it, total) }
+      finished += model.bytes
+    }
+    onProgress(total, total)
+    deleteLegacyModel()
+  }
+
+  private class Model(val url: String, val file: File, val bytes: Long)
+
+  private suspend fun downloadFile(url: String, target: File, onBytes: suspend (Long) -> Unit) {
+    val partFile = File(target.path + ".part")
     val resumeFrom = if (partFile.exists()) partFile.length() else 0L
-    val connection = URL(MODEL_URL).openConnection() as HttpURLConnection
+    val connection = URL(url).openConnection() as HttpURLConnection
     try {
       connection.connectTimeout = 15_000
       connection.readTimeout = 30_000
@@ -34,10 +49,10 @@ class ModelManager(private val dir: File) {
 
       val start = if (resuming) resumeFrom else 0L
       val length = connection.contentLengthLong
-      val total = if (length > 0) start + length else -1L
+      val expected = if (length > 0) start + length else -1L
       var done = start
       connection.inputStream.use { input ->
-        java.io.FileOutputStream(partFile, resuming).use { output ->
+        FileOutputStream(partFile, resuming).use { output ->
           val buffer = ByteArray(64 * 1024)
           while (true) {
             coroutineContext.ensureActive()
@@ -45,20 +60,32 @@ class ModelManager(private val dir: File) {
             if (read < 0) break
             output.write(buffer, 0, read)
             done += read
-            onProgress(done, total)
+            onBytes(done)
           }
         }
       }
-      if (total > 0 && done != total) throw IOException("Download incomplete: $done of $total bytes")
-      if (!partFile.renameTo(modelFile)) throw IOException("Could not save the model file")
+      if (expected > 0 && done != expected) throw IOException("Download incomplete: $done of $expected bytes")
+      if (!partFile.renameTo(target)) throw IOException("Could not save ${target.name}")
     } finally {
       connection.disconnect()
     }
   }
 
+  /** The earlier EmbeddingGemma model and its GPU caches are about 700 MB and no longer used. */
+  private fun deleteLegacyModel() {
+    dir.listFiles { file -> file.name.startsWith("embeddinggemma") }?.forEach { it.delete() }
+  }
+
   companion object {
-    const val MODEL_NAME = "embeddinggemma-2-740m.litertlm"
-    const val MODEL_URL =
-      "https://huggingface.co/litert-community/embeddinggemma-2-740m-litert-lm/resolve/main/embeddinggemma-2-740m.litertlm"
+    const val VISION_NAME = "clip-vit-b32-vision-q8.onnx"
+    const val TEXT_NAME = "clip-vit-b32-text-q8.onnx"
+
+    private const val BASE = "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/main/onnx"
+    const val VISION_URL = "$BASE/vision_model_quantized.onnx"
+    const val TEXT_URL = "$BASE/text_model_quantized.onnx"
+
+    // Exact sizes of the two files, used only for the combined progress bar.
+    const val VISION_BYTES = 89_117_001L
+    const val TEXT_BYTES = 64_504_507L
   }
 }

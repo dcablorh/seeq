@@ -25,10 +25,6 @@
         android:windowSoftInputMode="adjustResize"
         android:theme="@style/Theme.LocalLens">
 
-        <!-- Needed for the GPU backend of the on-device model. -->
-        <uses-native-library android:name="libvndksupport.so" android:required="false" />
-        <uses-native-library android:name="libOpenCL.so" android:required="false" />
-
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"

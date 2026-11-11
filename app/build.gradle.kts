@@ -71,8 +71,6 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
-  // The JVM has no org.json (Android ships it); the tokenizer test loads the real vocabulary file.
-  testImplementation(libs.org.json)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
@@ -83,6 +81,8 @@ dependencies {
   // Background indexing
   implementation(libs.androidx.work.runtime.ktx)
 
-  // On-device EmbeddingGemma 2 (text + image embeddings)
-  implementation(libs.litertlm.android)
+  // On-device CLIP (text + image embeddings) run through ONNX Runtime
+  implementation(libs.onnxruntime.android)
+  // The JVM has no org.json (Android ships it); the tokenizer test loads the real vocabulary file.
+  testImplementation(libs.org.json)
 }
