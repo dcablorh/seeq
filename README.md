@@ -418,7 +418,16 @@ with an ARM64 image).
 # build, install and start on a connected phone
 ./gradlew installDebug
 adb shell am start -n com.example.locallens/.MainActivity
+
+# build the release APK
+./gradlew assembleRelease
+# -> app/build/outputs/apk/release/app-release.apk  (about 55 MB)
 ```
+
+The build only includes native code for 64-bit ARM (`abiFilters` in `app/build.gradle.kts`). The release build is
+signed with your local Android **debug key** (`~/.android/debug.keystore`), so it installs on a phone without any
+setup. It is not minified, and it is not suitable for the Play Store, which needs its own release key. For a release
+you intend to publish, build from a clean checkout of a commit, so the APK matches the code exactly.
 
 Use `gradlew.bat` on Windows. If the Kotlin compiler daemon fails to start on a low-memory machine, add
 `-Pkotlin.compiler.execution.strategy=in-process`.
@@ -482,8 +491,12 @@ These are single-device, single-run figures, not a benchmark. Speed on other pho
 - **Photos only.** Videos are not indexed.
 - **Brute-force search.** Exact and fast for tens of thousands of photos. A much larger library would want an
   approximate index.
-- **Debug APK size.** The debug build is about 165 MB because ONNX Runtime ships native code for every phone
-  architecture. Limiting the build to 64-bit ARM would remove most of it.
+- **64-bit ARM only.** ONNX Runtime ships native code for every phone architecture, which made the first debug build
+  about 165 MB. The build now keeps only `arm64-v8a`, so the release APK is about 55 MB and the debug APK about
+  63 MB. The cost is that it does not install on 32-bit ARM or x86 phones, or on emulators. Remove the `abiFilters`
+  line in `app/build.gradle.kts` to bring those back.
+- **Debug-signed release.** The release APK uses the debug key and is not minified. That is fine for sideloading to
+  your own phones and not for the Play Store.
 - **Tests are JVM-only.** Embedding quality and the Android UI are checked by hand on a phone, not by automated
   instrumented tests.
 
