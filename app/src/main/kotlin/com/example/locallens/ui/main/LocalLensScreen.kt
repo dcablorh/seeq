@@ -98,6 +98,26 @@ fun LocalLensScreen(modifier: Modifier = Modifier, viewModel: MainViewModel = vi
     onPauseOrDispose {}
   }
 
+  // First run goes through onboarding. Anyone who already has access and the model skips it.
+  val prefs = remember { context.getSharedPreferences("seeq", Context.MODE_PRIVATE) }
+  var onboarded by remember {
+    mutableStateOf(prefs.getBoolean("onboarded", false) || (hasAccess && viewModel.model.value == ModelState.Ready))
+  }
+
+  if (!onboarded) {
+    OnboardingFlow(
+      viewModel = viewModel,
+      hasAccess = hasAccess,
+      onAccessGranted = { hasAccess = true },
+      onFinished = {
+        prefs.edit().putBoolean("onboarded", true).apply()
+        onboarded = true
+      },
+      modifier = modifier.paperGrid(),
+    )
+    return
+  }
+
   Scaffold(
     modifier = modifier.paperGrid(),
     containerColor = Color.Transparent,
@@ -132,59 +152,7 @@ private fun SearchContent(viewModel: MainViewModel) {
       LaunchedEffect(Unit) { viewModel.startIndexing() }
       ReadyContent(viewModel)
     }
-    else -> {
-      val context = LocalContext.current
-      // The notification only shows download progress; the download runs even if it is denied.
-      val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        viewModel.downloadModel()
-      }
-      ModelSetup(
-        state,
-        onDownload = {
-          val needsAsk = Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-              PackageManager.PERMISSION_GRANTED
-          if (needsAsk) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else viewModel.downloadModel()
-        },
-      )
-    }
-  }
-}
-
-@Composable
-private fun ModelSetup(state: ModelState, onDownload: () -> Unit) {
-  Column(
-    modifier = Modifier.fillMaxSize().padding(24.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-    horizontalAlignment = Alignment.Start,
-  ) {
-    EyebrowText("One-time setup")
-    Text("Download the search model", style = MaterialTheme.typography.headlineSmall)
-    Text(
-      "seeq needs to download its on-device search model, about 155 MB. Use Wi-Fi. " +
-        "After this, search works with no internet connection.",
-    )
-    when (state) {
-      is ModelState.Downloading -> {
-        val fraction = state.fraction
-        if (fraction != null) {
-          LinearProgressIndicator(
-            progress = { fraction },
-            modifier = Modifier.fillMaxWidth(),
-            color = Ink,
-            trackColor = Mist,
-          )
-          EyebrowText("${(fraction * 100).toInt()}%")
-        } else {
-          LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Ink, trackColor = Mist)
-        }
-      }
-      is ModelState.Failed -> {
-        Text(state.message, color = MaterialTheme.colorScheme.error)
-        InkButton("Try again", onClick = onDownload)
-      }
-      else -> InkButton("Download model", onClick = onDownload)
-    }
+    else -> ModelSetupScreen(viewModel, state)
   }
 }
 
