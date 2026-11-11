@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,6 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -44,12 +47,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -71,6 +84,7 @@ import com.example.locallens.ui.theme.PillSearchBar
 import com.example.locallens.ui.theme.paperGrid
 import java.text.DateFormat
 import java.util.Date
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -195,7 +209,8 @@ private fun ReadyContent(viewModel: MainViewModel) {
       placeholder = "Search your photos",
       modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
     )
-    BackgroundAccessPrompt(Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+    // Out of the way while searching, so the results get the room.
+    if (search.query.isBlank()) BackgroundAccessPrompt(Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
     if (progress.running && progress.total > 0) {
       Column(Modifier.padding(horizontal = 24.dp)) {
         EyebrowText("Indexing photos ${progress.done} of ${progress.total}")
@@ -223,22 +238,73 @@ private fun ReadyContent(viewModel: MainViewModel) {
   }
 }
 
+/**
+ * The top matches sit in a header that collapses as you scroll the grid forward and comes straight back as soon as
+ * you scroll the other way. The grid gets the whole screen while you browse, and the carousel is one swipe away.
+ */
 @Composable
 private fun SearchResultsContent(results: List<PhotoRecord>, context: android.content.Context) {
-  Column(Modifier.fillMaxSize()) {
+  val topResults = results.take(20)
+  var headerHeight by remember { mutableIntStateOf(0) }
+  // 0 while the header is fully shown, down to -headerHeight once it is hidden.
+  var headerOffset by remember { mutableFloatStateOf(0f) }
+
+  // A new set of results always starts with the carousel showing.
+  LaunchedEffect(results) {
+    headerOffset = 0f
+    if (results.isEmpty()) headerHeight = 0
+  }
+
+  val connection = remember {
+    object : NestedScrollConnection {
+      override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        val height = headerHeight.toFloat()
+        if (height <= 0f || available.y == 0f) return Offset.Zero
+        // Scrolling forward (finger up) hides the header first, scrolling back (finger down) shows it first.
+        val target = (headerOffset + available.y).coerceIn(-height, 0f)
+        val used = target - headerOffset
+        headerOffset = target
+        return Offset(0f, used)
+      }
+
+      override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        // Never leave the header half-way: settle on whichever end is nearer.
+        val height = headerHeight.toFloat()
+        if (height > 0f) {
+          val target = if (headerOffset < -height / 2f) -height else 0f
+          animate(headerOffset, target) { value, _ -> headerOffset = value }
+        }
+        return Velocity.Zero
+      }
+    }
+  }
+
+  Column(Modifier.fillMaxSize().nestedScroll(connection)) {
     // --- Carousel (top 20 results) ---
-    val topResults = results.take(20)
     if (topResults.isNotEmpty()) {
-      Spacer(Modifier.height(8.dp))
-      EyebrowText(
-        "Top matches",
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-      )
-      CircularCarousel(
-        photos = topResults,
-        onPhotoClick = { openPhoto(context, it) },
-        modifier = Modifier.padding(vertical = 6.dp),
-      )
+      Box(
+        Modifier
+          .clipToBounds()
+          .layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+            val offset = headerOffset.roundToInt()
+            layout(placeable.width, (placeable.height + offset).coerceAtLeast(0)) { placeable.place(0, offset) }
+          }
+          .graphicsLayer { alpha = if (headerHeight > 0) 1f + headerOffset / headerHeight else 1f },
+      ) {
+        Column(Modifier.onSizeChanged { headerHeight = it.height }) {
+          Spacer(Modifier.height(8.dp))
+          EyebrowText(
+            "Top matches",
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+          )
+          CircularCarousel(
+            photos = topResults,
+            onPhotoClick = { openPhoto(context, it) },
+            modifier = Modifier.padding(vertical = 6.dp),
+          )
+        }
+      }
     }
 
     // --- All results grid ---
