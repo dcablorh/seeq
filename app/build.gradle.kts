@@ -71,6 +71,8 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  // The JVM has no org.json (Android ships it); the tokenizer test loads the real vocabulary file.
+  testImplementation(libs.org.json)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
