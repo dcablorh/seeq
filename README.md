@@ -10,6 +10,35 @@ with no internet connection.
 - Language: Kotlin, UI in Jetpack Compose
 - Search model: OpenAI CLIP ViT-B/32, 8-bit quantised, run with ONNX Runtime
 - Package name: `com.example.locallens` (the app is called seeq; the package kept its template name)
+- Download: the [latest release](https://github.com/dcablorh/seeq/releases/latest), see
+  [Download and install](#download-and-install)
+
+---
+
+## Download and install
+
+The APK is attached to the [latest release](https://github.com/dcablorh/seeq/releases/latest) as
+`seeq-1.0-arm64.apk` (58,023,418 bytes, about 55 MB). The repository is private, so sign in to GitHub with an account
+that has access.
+
+**Requirements:** Android 10 or newer, and a 64-bit ARM phone, which covers nearly every phone sold in the last
+several years. This build does not install on 32-bit ARM or x86 phones, or on emulators.
+
+1. Download the APK on the phone and open it.
+2. Android asks you to allow installs from the app you opened it with (your browser or files app). Allow it for this
+   install.
+3. Open seeq and follow the first-run steps: allow photo access, then tap **Download model** on Wi-Fi (about 155 MB).
+4. Keep the app open while it builds the index. That took about 5 minutes for 2,650 photos on the test phone.
+
+Notes:
+
+- The APK is signed with the Android **debug key** of the computer that built it, so it is for sideloading and not
+  the Play Store. Android may show an unknown-source warning or offer a Play Protect scan.
+- A new APK installs over the old one and keeps your index and models only if both were signed with the same key.
+  Builds made on a different computer use a different key, and installing one over the other means uninstalling
+  first, which deletes the downloaded models and the index.
+- Check the download with its SHA-256:
+  `950d271c429fe239041d7e102efdd957d9de16e286932fdb83709293d3314814`.
 
 ---
 
