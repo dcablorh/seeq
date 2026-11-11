@@ -13,10 +13,16 @@ android {
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
+
+    // ONNX Runtime ships native code for every phone architecture; keeping only 64-bit ARM (nearly every phone
+    // made in the last several years) removes most of the download.
+    ndk { abiFilters += "arm64-v8a" }
   }
 
   buildTypes {
     release {
+      // Signed with the local debug key so the APK installs on a phone. Fine for sideloading, not for the Play Store.
+      signingConfig = signingConfigs.getByName("debug")
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
