@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -55,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.locallens.data.PhotoRecord
 import com.example.locallens.data.uri
+import com.example.locallens.ui.BackgroundAccessPrompt
 import com.example.locallens.ui.PhotoPermissionScreen
 import com.example.locallens.ui.hasPhotoAccess
 import com.example.locallens.ui.theme.CardShape
@@ -178,6 +181,13 @@ private fun ReadyContent(viewModel: MainViewModel) {
   val indexed by viewModel.indexed.collectAsStateWithLifecycle()
   val context = LocalContext.current
 
+  // Indexing is fastest while the app is in front, so keep the screen awake for as long as it runs.
+  val view = LocalView.current
+  DisposableEffect(progress.running) {
+    view.keepScreenOn = progress.running
+    onDispose { view.keepScreenOn = false }
+  }
+
   Column(Modifier.fillMaxSize()) {
     PillSearchBar(
       value = search.query,
@@ -185,6 +195,7 @@ private fun ReadyContent(viewModel: MainViewModel) {
       placeholder = "Search your photos",
       modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
     )
+    BackgroundAccessPrompt(Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
     if (progress.running && progress.total > 0) {
       Column(Modifier.padding(horizontal = 24.dp)) {
         EyebrowText("Indexing photos ${progress.done} of ${progress.total}")
